@@ -50,13 +50,7 @@ app.get('/',async(_req:express.Request,res:express.Response)=>{
      }   
     }
     modifiedResult.push(allResultObj);
-    modifiedResult.sort((a: any, b: any) => {
-        const keyA = Object.keys(a)[0];
-        const keyB = Object.keys(b)[0];
-        const vnCodeA = a[keyA]["VN Code"] || "";
-        const vnCodeB = b[keyB]["VN Code"] || "";
-        return vnCodeA - vnCodeB;
-    })
+    
     res.json(modifiedResult);
 })
 
