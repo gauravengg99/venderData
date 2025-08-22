@@ -1,0 +1,24 @@
+# Node modules
+node_modules/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Environment variables
+.env
+
+# TypeScript build output
+dist/
+build/
+*.tsbuildinfo
+
+# Credentials and sensitive files
+credentials.json
+
+# VS Code settings
+.vscode/
+
+# OS files
+.DS_Store
