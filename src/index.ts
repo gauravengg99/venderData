@@ -1,8 +1,13 @@
 import express , {type Express} from 'express';
 import GetData from './module/getData';
-const app:Express = express();
+import GetCustomer, {type IVenderDetails } from './module/getCustomer';
+import resolves from './lib/resolve';
+import dotenv from 'dotenv';
+import prisma from '../db/db';
+dotenv.config({path: './.env'});
 
-export interface IvenderProductList {
+const app:Express = express();
+export interface IvenderProductList  {
     "No.": string;
     "PO Date": string;
     "PO Number": string;
@@ -13,9 +18,16 @@ export interface IvenderProductList {
     "Project name ": string;
     "Drwg. No": string;
     "Total Qty": string;
-    "Price Per Nos": string;
+    "Price Per Nos": string;  //  'VENDOR CODE': string,
+     Name: string,
+    'NAME OF PERSON': string,
+    'CONTACT NUMBER': string,
+    GSTIN: string,
+    'MSME NUM': string,
+    'MAIL ID': string,
+    // ADDRESS: string 
 }
-export interface IVendorAggregatedDetail {
+export interface IVendorAggregatedDetail  {
     "No.": string;
     "PO Date": string;
     "PO Number": string;
@@ -26,47 +38,97 @@ export interface IVendorAggregatedDetail {
     "Project name ": string;
     "Drwg. No": string;
     "Total Qty": string;
-    "Price Per Nos": string[]; // Aggregated as array
+    "Price Per Nos": string; // Aggregated as array
+    //  'VENDOR CODE': string,
+      Name: string,
+    'NAME OF PERSON': string,
+    'CONTACT NUMBER': string,
+    GSTIN: string,
+    'MSME NUM': string,
+    'MAIL ID': string,
+    ADDRESS: string 
 }
+ 
 export interface IvenderDetailList{
-   [venderName: string]: IVendorAggregatedDetail
+   [venderName: IvenderProductList["Vendor Name"]]: IVendorAggregatedDetail
 }
 
+const FILE_PATH = 'credentials.json'; // Replace with your actual key file path
+const SCOPES = ['https://www.googleapis.com/auth/spreadsheets.readonly'];
+const SPREADSHEETID = '195kPYe6mVoWXJw27SKEn4SO7L5d32bXCSJlfDzuvPpc'; // Replace with your actual spreadsheet ID
+const RANGE = '25-26!A1:K528'; // Replace with your actual range
+const SPREADSHEETID1 = '1K6yyMuAJMCr6x_lYk8ya-CWarIomrYh1rW0_P8XBnx8'
+const RANGE1 = '2425!A1:K1317';
+const SPREADSHEETID2 = '11MvVNbsSvBMkS6uAb_iSyCxq707seTY9dOqdsUunn-E'
+const RANGE2 = '23-24!A1:K710';
+const CUSTOMERSHEET = SPREADSHEETID;
+const CUSTOMERANGE = 'Vender Details!A1:H166';
+
+
 app.get('/',async(_req:express.Request,res:express.Response)=>{
-    const FILE_PATH = 'credentials.json'; // Replace with your actual key file path
-    const SCOPES = ['https://www.googleapis.com/auth/spreadsheets.readonly'];
-    const SPREADSHEETID = '195kPYe6mVoWXJw27SKEn4SO7L5d32bXCSJlfDzuvPpc'; // Replace with your actual spreadsheet ID
-    const RANGE = '25-26!A1:K528'; // Replace with your actual range
-    const SPREADSHEETID1 = '1K6yyMuAJMCr6x_lYk8ya-CWarIomrYh1rW0_P8XBnx8'
-    const RANGE1 = '2425!A1:K1013';
-    const SPREADSHEETID2 = '11MvVNbsSvBMkS6uAb_iSyCxq707seTY9dOqdsUunn-E'
-    const RANGE2 = '23-24!A1:K710';
-    const data = new GetData(SPREADSHEETID, RANGE, SCOPES, FILE_PATH);
-    const result = await data.getData();
+    const data = new GetData(SPREADSHEETID, RANGE, SCOPES, FILE_PATH); 
     const data1 = new GetData(SPREADSHEETID1, RANGE1, SCOPES, FILE_PATH);
-    const result1 = await data1.getData();
     const data2 = new GetData(SPREADSHEETID2, RANGE2, SCOPES, FILE_PATH);
-    const result2 = await data2.getData();
-    const allResult:IvenderProductList[] = [...result, ...result1, ...result2]
+    const allResults = await resolves(data.getData(), data1.getData(), data2.getData())
+   
+
+    const allResult: typeof allResults = await allResults
+    .map((item:any)=>({
+        ...item,
+        ["Vendor Name"]: item["Vendor Name"]?.trim() ?? "",
+    }))
+
     let allResultObj = {} as IvenderDetailList;
     let modifiedResult:IVendorAggregatedDetail[] = []
+    let customerResultObj = {} as IVenderDetails;
+    if(!allResult){
+      throw new Error("No Data Found")
+    }
     for (const item of allResult) {
         const vendorName = item['Vendor Name'] as keyof IvenderDetailList ?? "" as string;
-        if(item && item['Vendor Name'] in allResultObj) {
-            if(!allResultObj[vendorName].Product.includes(item.Product) && !allResultObj[vendorName]['Price Per Nos'].includes(item['Price Per Nos'])){
+        if(item && item['Vendor Name'] in allResultObj) {   
+            if(!allResultObj[vendorName].Product.includes(item['Vendor Name']) && !allResultObj[vendorName]['Price Per Nos'].includes(item['Price Per Nos'])){
                 allResultObj[vendorName].Product.push(item.Product.concat(`- ${item['Price Per Nos']} Rs - ${item['PO Date']}`));
                 
             }
-         }
-     else {
-        allResultObj[vendorName] = JSON.parse(JSON.stringify(item));
-        allResultObj[vendorName].Product = [item.Product];
-    }   
+            }
+        else {
+            allResultObj[vendorName] =  JSON.parse(JSON.stringify(item));
+            allResultObj[vendorName].Product = [item.Product];
+            
+        }   
     }
     modifiedResult = Object.values(allResultObj);
     modifiedResult.sort((a,b)=>Number(a['VN Code']) - Number(b['VN Code']));
-    res.json(modifiedResult);
+    
+    res.json(modifiedResult)
 })
+
+   app.get('/vender',async(req:express.Request,res:express.Response)=>{
+       const data = new GetCustomer(CUSTOMERSHEET, CUSTOMERANGE, SCOPES, FILE_PATH); 
+       const customerResults = await data.getData();
+       customerResults.map(async(item)=>{
+          if(Number(item['VENDOR CODE']) > 49 && Number(item['VENDOR CODE']) < 101){
+            await prisma.vender.updateMany({
+                where:{
+                    vnCode: item['VENDOR CODE'].trim()
+                }, 
+                    data:{
+                    nameOfPerson: item['NAME OF PERSON'],
+                    contactNumber: item['CONTACT NUMBER'],  
+                    email: item['MAIL ID'],
+                    address: item.ADDRESS,
+                    gstNumber: item.GSTIN
+                    }
+                
+            })
+        }
+       })
+       if(!customerResults){    
+        throw new Error("No Data Found")                    
+       }
+    res.json(customerResults)
+   })
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
